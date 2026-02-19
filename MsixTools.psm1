@@ -306,6 +306,7 @@ function New-MsixPackage {
     $cfgSvc     = Get-CfgValue $cfg 'service'
     $cfgDsk     = Get-CfgValue $cfg 'desktop'
     $cfgPlugins = Get-CfgValue $cfg 'plugins' @()
+    if ($null -eq $cfgPlugins) { $cfgPlugins = @() }
     if ($cfgPlugins -is [System.Collections.IDictionary]) { $cfgPlugins = @($cfgPlugins) }
     $cfgBuild   = Get-CfgValue $cfg 'build'
     $cfgOutput  = Get-CfgValue $cfg 'output'
