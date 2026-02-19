@@ -229,8 +229,23 @@ function New-MsixPackage {
     .PARAMETER DevCert
         Create or reuse a self-signed dev certificate and sign the package.
 
+    .PARAMETER BumpMajor
+        Increment the major component of next-version in GitVersion.yml before building
+        (resets minor and patch to 0). Mutually exclusive with -BumpMinor and -BumpPatch.
+
+    .PARAMETER BumpMinor
+        Increment the minor component of next-version in GitVersion.yml before building
+        (resets patch to 0). Mutually exclusive with -BumpMajor and -BumpPatch.
+
+    .PARAMETER BumpPatch
+        Increment the patch component of next-version in GitVersion.yml before building.
+        Mutually exclusive with -BumpMajor and -BumpMinor.
+
     .PARAMETER Clean
         Delete bin/ and obj/ directories before publishing.
+
+    .PARAMETER NoBuild
+        Skip dotnet publish; use existing publish output. Mutually exclusive with -Clean.
 
     .PARAMETER Force
         Skip the AppxManifest review pause.
@@ -265,6 +280,9 @@ function New-MsixPackage {
         [switch]      $DevCert,
         [switch]      $Clean,
         [switch]      $NoBuild,
+        [switch]      $BumpMajor,
+        [switch]      $BumpMinor,
+        [switch]      $BumpPatch,
         [switch]      $Force,
         [switch]      $Install,
         [string]      $OutDir = ''
@@ -367,6 +385,28 @@ function New-MsixPackage {
     }
     if ($Clean -and $NoBuild) {
         Write-Error "$tag -Clean and -NoBuild are mutually exclusive."
+    }
+    if (($BumpMajor.IsPresent + $BumpMinor.IsPresent + $BumpPatch.IsPresent) -gt 1) {
+        Write-Error "$tag -BumpMajor, -BumpMinor, and -BumpPatch are mutually exclusive."
+    }
+
+    # ── Version bump ──────────────────────────────────────────────────────────
+    if ($BumpMajor -or $BumpMinor -or $BumpPatch) {
+        $gvYml = Join-Path $WorkspaceRoot 'GitVersion.yml'
+        if (-not (Test-Path $gvYml)) { Write-Error "$tag GitVersion.yml not found at $gvYml." }
+        $current = (Get-Content $gvYml | Select-String '^\s*next-version:\s*(.+)').Matches[0].Groups[1].Value.Trim()
+        $parts   = $current -split '\.'
+        if ($parts.Count -lt 3 -or ($parts | Where-Object { $_ -notmatch '^\d+$' })) {
+            Write-Error "$tag Cannot parse next-version '$current' in GitVersion.yml."
+        }
+        [int]$maj = $parts[0]; [int]$min = $parts[1]; [int]$pat = $parts[2]
+        if      ($BumpMajor) { $maj++; $min = 0; $pat = 0 }
+        elseif  ($BumpMinor) { $min++; $pat = 0 }
+        else                 { $pat++ }
+        $newVer = "$maj.$min.$pat"
+        (Get-Content $gvYml -Raw) -replace '(?m)^(next-version:\s*).*', "`${1}$newVer" |
+            Set-Content $gvYml -Encoding UTF8
+        Write-Host "$tag bumped next-version: $current -> $newVer"
     }
 
     # ── Version detection ─────────────────────────────────────────────────────
