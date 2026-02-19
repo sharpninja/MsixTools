@@ -1,0 +1,8 @@
+# PowerShell / Windows artifacts
+*.ps1xml
+
+# Generated icons (placeholders)
+artifacts/
+
+# VS Code
+.vscode/
