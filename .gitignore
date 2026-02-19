@@ -6,3 +6,7 @@ artifacts/
 
 # VS Code
 .vscode/
+
+# MCP server build output
+mcp-server/node_modules/
+mcp-server/dist/

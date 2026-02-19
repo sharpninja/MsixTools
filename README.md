@@ -139,3 +139,73 @@ Icons are sourced in priority order:
 ## License
 
 MIT
+
+---
+
+## MCP Server
+
+The `mcp-server/` directory contains a **stdio MCP server** that exposes all MsixTools commands as tools for AI agents (GitHub Copilot, Claude, etc.).
+
+### Prerequisites
+
+| Requirement | Notes |
+|---|---|
+| Node.js ≥ 18 | For running the server |
+| PowerShell 7+ | `pwsh` must be on PATH |
+| Windows SDK | `makeappx.exe` / `signtool.exe` (for `new_msix_package`) |
+| .NET SDK | 9 + 10 (for `new_msix_package`) |
+
+### Build
+
+```powershell
+cd mcp-server
+npm install
+npm run build
+```
+
+### Configure your MCP client
+
+Add to your MCP client config (e.g. `.github/copilot/mcp.json` or `~/.config/claude/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "msixtools": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["E:/github/MsixTools/mcp-server/dist/index.js"]
+    }
+  }
+}
+```
+
+Or if installed globally via npm link:
+
+```json
+{
+  "mcpServers": {
+    "msixtools": {
+      "type": "stdio",
+      "command": "msixtools-mcp"
+    }
+  }
+}
+```
+
+### Available tools
+
+| Tool | Description |
+|---|---|
+| `read_msix_config` | Parse and return `msix.yml` as JSON |
+| `get_msix_version` | Resolve current semver + 4-part MSIX version from `GitVersion.yml` / git tags |
+| `new_msix_package` | Full build → sign → (optionally install) pipeline |
+| `install_msix_package` | Install an existing `.msix` and start the service |
+| `uninstall_msix_package` | Stop the service and remove the package |
+
+### Example agent prompt
+
+```
+Use the msixtools MCP server to bump the patch version and build a new
+MSIX package for workspace_root E:/github/remote-agent, using a dev cert,
+with force=true.
+```
