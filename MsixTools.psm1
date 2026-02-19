@@ -339,6 +339,7 @@ function New-MsixPackage {
                 Path         = $p
                 Framework    = Get-CfgValue $cfgSvc 'framework'    'net10.0'
                 ServiceName  = Get-CfgValue $cfgSvc 'serviceName'  $PackageName
+                DisplayName  = Get-CfgValue $cfgSvc 'displayName'  "$PackageDisplayName Service"
                 SubDir       = Get-CfgValue $cfgSvc 'subDir'       'service'
                 StartAccount = Get-CfgValue $cfgSvc 'startAccount' 'localSystem'
                 StartupType  = Get-CfgValue $cfgSvc 'startupType'  'auto'
@@ -573,12 +574,19 @@ function New-MsixPackage {
     $appDesc = if ($DesktopProject) { $DesktopProject['Description'] ?? "$PackageDisplayName desktop application" } else { "$PackageDisplayName service host" }
     $appId   = if ($DesktopProject) { $DesktopProject['AppId'] ?? "${PackageName}App" } else { "${PackageName}App" }
 
-    $svcExtXml = ''
+    # Build service extension / application XML.
+    # When both service and desktop are present the service gets its own
+    # Application entry so its SCM display name can include the SemVer.
+    $svcExtXml = ''   # extension inside main Application (service-only packages)
+    $svcAppXml = ''   # dedicated second Application (combined service+desktop)
     if ($ServiceProject) {
-        $svcName    = $ServiceProject['ServiceName'] ?? $PackageName
-        $startAcct  = $ServiceProject['StartAccount'] ?? 'localSystem'
-        $startType  = $ServiceProject['StartupType']  ?? 'auto'
-        $svcExtXml  = @"
+        $svcName     = $ServiceProject['ServiceName'] ?? $PackageName
+        $startAcct   = $ServiceProject['StartAccount'] ?? 'localSystem'
+        $startType   = $ServiceProject['StartupType']  ?? 'auto'
+        $svcBaseDisp = $ServiceProject['DisplayName']  ?? "$PackageDisplayName Service"
+        $svcDispName = if ($Version) { "$svcBaseDisp $Version" } else { $svcBaseDisp }
+        $svcDesc     = "$svcDispName gRPC host"
+        $svcExtBlock = @"
 
       <Extensions>
         <desktop6:Extension Category="windows.service"
@@ -590,6 +598,27 @@ function New-MsixPackage {
         </desktop6:Extension>
       </Extensions>
 "@
+        if ($DesktopProject) {
+            # Combined package: give the service its own Application entry so
+            # services.msc shows the versioned display name, not the desktop name.
+            $svcAppXml = @"
+    <Application Id="${PackageName}Svc"
+                 Executable="$svcExeRel"
+                 EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="$svcDispName"
+        Description="$svcDesc"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+      </uap:VisualElements>
+$svcExtBlock
+    </Application>
+"@
+        } else {
+            # Service-only package: keep extension inside the main Application.
+            $svcExtXml = $svcExtBlock
+        }
     }
 
     $rescapNs  = 'xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"'
@@ -646,6 +675,7 @@ function New-MsixPackage {
       </uap:VisualElements>
 $svcExtXml
     </Application>
+$svcAppXml
   </Applications>
 
 </Package>
